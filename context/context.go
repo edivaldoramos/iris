@@ -2,7 +2,7 @@ package context
 
 import (
 	"bytes"
-	stdContext "context"
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -30,11 +30,12 @@ import (
 
 	"github.com/Shopify/goreferrer"
 	"github.com/fatih/structs"
+	"github.com/gomarkdown/markdown"
+	"github.com/gomarkdown/markdown/html"
 	"github.com/iris-contrib/schema"
 	"github.com/mailru/easyjson"
 	"github.com/mailru/easyjson/jwriter"
 	"github.com/microcosm-cc/bluemonday"
-	"github.com/russross/blackfriday/v2"
 	"github.com/vmihailenco/msgpack/v5"
 	"golang.org/x/net/publicsuffix"
 	"golang.org/x/time/rate"
@@ -69,7 +70,7 @@ type (
 	// Note: This is totally optionally, the default decoders
 	// for ReadJSON is the encoding/json and for ReadXML is the encoding/xml.
 	//
-	// Example: https://github.com/kataras/iris/blob/master/_examples/request-body/read-custom-per-type/main.go
+	// Example: https://github.com/kataras/iris/blob/main/_examples/request-body/read-custom-per-type/main.go
 	BodyDecoder interface {
 		Decode(data []byte) error
 	}
@@ -77,7 +78,7 @@ type (
 	// BodyDecoderWithContext same as BodyDecoder but it can accept a standard context,
 	// which is binded to the HTTP request's context.
 	BodyDecoderWithContext interface {
-		DecodeContext(ctx stdContext.Context, data []byte) error
+		DecodeContext(ctx context.Context, data []byte) error
 	}
 
 	// Unmarshaler is the interface implemented by types that can unmarshal any raw data.
@@ -90,7 +91,7 @@ type (
 	//
 	// See 'Unmarshaler' and 'BodyDecoder' for more.
 	//
-	// Example: https://github.com/kataras/iris/blob/master/_examples/request-body/read-custom-via-unmarshaler/main.go
+	// Example: https://github.com/kataras/iris/blob/main/_examples/request-body/read-custom-via-unmarshaler/main.go
 	UnmarshalerFunc func(data []byte, outPtr interface{}) error
 
 	// DecodeFunc is a generic type of decoder function.
@@ -274,8 +275,8 @@ func IsErrCanceled(err error) bool {
 
 	var netErr net.Error
 	return (errors.As(err, &netErr) && netErr.Timeout()) ||
-		errors.Is(err, stdContext.Canceled) ||
-		errors.Is(err, stdContext.DeadlineExceeded) ||
+		errors.Is(err, context.Canceled) ||
+		errors.Is(err, context.DeadlineExceeded) ||
 		errors.Is(err, http.ErrHandlerTimeout) ||
 		err.Error() == "closed pool"
 }
@@ -436,7 +437,7 @@ var acquireGoroutines = func() interface{} {
 	return &goroutines{wg: new(sync.WaitGroup)}
 }
 
-func (ctx *Context) Go(fn func(cancelCtx stdContext.Context)) (running int) {
+func (ctx *Context) Go(fn func(cancelCtx context.Context)) (running int) {
 	g := ctx.values.GetOrSet(goroutinesContextKey, acquireGoroutines).(*goroutines)
 	if fn != nil {
 		g.wg.Add(1)
@@ -447,7 +448,7 @@ func (ctx *Context) Go(fn func(cancelCtx stdContext.Context)) (running int) {
 
 		ctx.waitFunc = g.wg.Wait
 
-		go func(reqCtx stdContext.Context) {
+		go func(reqCtx context.Context) {
 			fn(reqCtx)
 			g.wg.Done()
 
@@ -1079,7 +1080,7 @@ func (ctx *Context) Subdomain() (subdomain string) {
 // this request based on subdomain and request path.
 //
 // Order may change.
-// Example: https://github.com/kataras/iris/tree/master/_examples/routing/intelligence/manual
+// Example: https://github.com/kataras/iris/tree/main/_examples/routing/intelligence/manual
 func (ctx *Context) FindClosest(n int) []string {
 	return ctx.app.FindClosestPaths(ctx.Subdomain(), ctx.Path(), n)
 }
@@ -1357,7 +1358,7 @@ func (ctx *Context) GetLocale() Locale {
 // Tr returns a i18n localized message based on format with optional arguments.
 // See `GetLocale` too.
 //
-// Example: https://github.com/kataras/iris/tree/master/_examples/i18n
+// Example: https://github.com/kataras/iris/tree/main/_examples/i18n
 func (ctx *Context) Tr(key string, args ...interface{}) string {
 	return ctx.app.I18nReadOnly().TrContext(ctx, key, args...)
 }
@@ -1519,7 +1520,7 @@ func (ctx *Context) URLParam(name string) string {
 // URLParamSlice a shortcut of ctx.Request().URL.Query()[name].
 // Like `URLParam` but it returns all values instead of a single string separated by commas.
 // Returns the values of a url query of the given "name" as string slice, e.g.
-// ?name=john&name=doe&name=kataras will return [ john doe kataras].
+// ?names=john&names=doe&names=kataras and ?names=john,doe,kataras will return [ john doe kataras].
 //
 // Note that, this method skips any empty entries.
 //
@@ -1531,10 +1532,20 @@ func (ctx *Context) URLParamSlice(name string) []string {
 		return values
 	}
 
-	normalizedValues := make([]string, 0, n)
+	var sep string
+	if sepPtr := ctx.app.ConfigurationReadOnly().GetURLParamSeparator(); sepPtr != nil {
+		sep = *sepPtr
+	}
 
+	normalizedValues := make([]string, 0, n)
 	for _, v := range values {
 		if v == "" {
+			continue
+		}
+
+		if sep != "" {
+			values := strings.Split(v, sep)
+			normalizedValues = append(normalizedValues, values...)
 			continue
 		}
 
@@ -2316,7 +2327,7 @@ func (ctx *Context) PostValueSimpleDate(name string) (time.Time, error) {
 // The default form's memory maximum size is 32MB, it can be changed by the
 // `iris#WithPostMaxMemory` configurator at main configuration passed on `app.Run`'s second argument.
 //
-// Example: https://github.com/kataras/iris/tree/master/_examples/file-server/upload-file
+// Example: https://github.com/kataras/iris/tree/main/_examples/file-server/upload-file
 func (ctx *Context) FormFile(key string) (multipart.File, *multipart.FileHeader, error) {
 	// we don't have access to see if the request is body stream
 	// and then the ParseMultipartForm can be useless
@@ -2369,6 +2380,15 @@ func (ctx *Context) FormFiles(key string, before ...func(*Context, *multipart.Fi
 	return nil, nil, http.ErrMissingFile
 }
 
+var (
+	// ValidFileNameRegexp is used to validate the user input by using a regular expression.
+	// See `Context.UploadFormFiles` method.
+	ValidFilenameRegexp = regexp.MustCompile(`^[a-zA-Z0-9_\-\.]+$`)
+	// ValidExtensionRegexp acts as an allowlist of valid extensions. It's optional. Defaults to nil (all file extensions are allowed to be uploaded).
+	// See `Context.UploadFormFiles` method.
+	ValidExtensionRegexp *regexp.Regexp
+)
+
 // UploadFormFiles uploads any received file(s) from the client
 // to the system physical location "destDirectory".
 //
@@ -2395,7 +2415,7 @@ func (ctx *Context) FormFiles(key string, before ...func(*Context, *multipart.Fi
 //
 // See `FormFile` and `FormFiles` to a more controlled way to receive a file.
 //
-// Example: https://github.com/kataras/iris/tree/master/_examples/file-server/upload-files
+// Example: https://github.com/kataras/iris/tree/main/_examples/file-server/upload-files
 func (ctx *Context) UploadFormFiles(destDirectory string, before ...func(*Context, *multipart.FileHeader) bool) (uploaded []*multipart.FileHeader, n int64, err error) {
 	err = ctx.request.ParseMultipartForm(ctx.app.ConfigurationReadOnly().GetPostMaxMemory())
 	if err != nil {
@@ -2407,17 +2427,56 @@ func (ctx *Context) UploadFormFiles(destDirectory string, before ...func(*Contex
 			for _, files := range fhs {
 			innerLoop:
 				for _, file := range files {
-					// Security fix for go < 1.17.5:
-					// Reported by Kirill Efimov (snyk.io) through security reports.
-					file.Filename = filepath.Base(file.Filename)
-
 					for _, b := range before {
 						if !b(ctx, file) {
 							continue innerLoop
 						}
 					}
 
-					n0, err0 := ctx.SaveFormFile(file, filepath.Join(destDirectory, file.Filename))
+					// Security fix for go < 1.17.5:
+					// Reported by Kirill Efimov (snyk.io) through security reports.
+					filename := filepath.Base(filepath.ToSlash(file.Filename))
+
+					// CWE-99.
+
+					// Sanitize the user input by using a regular expression
+					// and an allowlist of valid extensions
+					isValidFilename := ValidFilenameRegexp.MatchString(filename)
+					if !isValidFilename {
+						// Reject the input as it is invalid or unsafe.
+						continue innerLoop
+					}
+
+					if ValidExtensionRegexp != nil && !ValidExtensionRegexp.MatchString(filename) {
+						// Reject the input as it is invalid or unsafe.
+						continue innerLoop
+					}
+
+					// Join the sanitized input with the destination directory.
+					destPath := filepath.Join(destDirectory, filename)
+
+					// Get the canonical path of the destination
+					// canonicalDestPath, err := filepath.EvalSymlinks(destPath)
+					// if err != nil {
+					// 	return nil, 0, fmt.Errorf("dest path: %s: eval symlinks: %w", destPath, err)
+					// }
+					// ^ No, it will try to find the file before uploaded.
+
+					// Get the canonical path of the destination directory.
+					canonicalDestDir, err := filepath.EvalSymlinks(destDirectory) // the destDirectory should exists.
+					if err != nil {
+						return nil, 0, fmt.Errorf("dest directory: %s: eval symlinks: %w", destDirectory, err)
+					}
+
+					// Check if the destination path is within the destination directory.
+					if !strings.HasPrefix(destPath, canonicalDestDir) {
+						// Reject the input as it is a path traversal attempt.
+						continue innerLoop
+					}
+
+					file.Filename = filename
+
+					n0, err0 := ctx.SaveFormFile(file, destPath)
 					if err0 != nil {
 						return nil, 0, err0
 					}
@@ -2625,7 +2684,7 @@ type Validator interface {
 // UnmarshalBody reads the request's body and binds it to a value or pointer of any type
 // Examples of usage: context.ReadJSON, context.ReadXML.
 //
-// Example: https://github.com/kataras/iris/blob/master/_examples/request-body/read-custom-via-unmarshaler/main.go
+// Example: https://github.com/kataras/iris/blob/main/_examples/request-body/read-custom-via-unmarshaler/main.go
 func (ctx *Context) UnmarshalBody(outPtr interface{}, unmarshaler Unmarshaler) error {
 	if ctx.request.Body == nil {
 		return fmt.Errorf("unmarshal: empty body: %w", ErrNotFound)
@@ -2723,7 +2782,7 @@ var ReadJSON = func(ctx *Context, outPtr interface{}, opts ...JSONReader) error 
 
 // ReadJSON reads JSON from request's body and binds it to a value of any json-valid type.
 //
-// Example: https://github.com/kataras/iris/blob/master/_examples/request-body/read-json/main.go
+// Example: https://github.com/kataras/iris/blob/main/_examples/request-body/read-json/main.go
 func (ctx *Context) ReadJSON(outPtr interface{}, opts ...JSONReader) error {
 	return ReadJSON(ctx, outPtr, opts...)
 }
@@ -2737,7 +2796,7 @@ func (ctx *Context) ReadJSON(outPtr interface{}, opts ...JSONReader) error {
 // It accepts a function which accepts the json Decode function and returns an error.
 // The second variadic argument is optional and can be used to customize the decoder even further.
 //
-// Example: https://github.com/kataras/iris/blob/master/_examples/request-body/read-json-stream/main.go
+// Example: https://github.com/kataras/iris/blob/main/_examples/request-body/read-json-stream/main.go
 func (ctx *Context) ReadJSONStream(onDecode func(DecodeFunc) error, opts ...JSONReader) error {
 	decoder := json.NewDecoder(ctx.request.Body)
 
@@ -2769,22 +2828,22 @@ func (ctx *Context) ReadJSONStream(onDecode func(DecodeFunc) error, opts ...JSON
 
 // ReadXML reads XML from request's body and binds it to a value of any xml-valid type.
 //
-// Example: https://github.com/kataras/iris/blob/master/_examples/request-body/read-xml/main.go
+// Example: https://github.com/kataras/iris/blob/main/_examples/request-body/read-xml/main.go
 func (ctx *Context) ReadXML(outPtr interface{}) error {
 	return ctx.UnmarshalBody(outPtr, UnmarshalerFunc(xml.Unmarshal))
 }
 
 // ReadYAML reads YAML from request's body and binds it to the "outPtr" value.
 //
-// Example: https://github.com/kataras/iris/blob/master/_examples/request-body/read-yaml/main.go
+// Example: https://github.com/kataras/iris/blob/main/_examples/request-body/read-yaml/main.go
 func (ctx *Context) ReadYAML(outPtr interface{}) error {
 	return ctx.UnmarshalBody(outPtr, UnmarshalerFunc(yaml.Unmarshal))
 }
 
 var (
 	// IsErrEmptyJSON reports whether the given "err" is caused by a
-	// Context.ReadJSON call when the request body
-	// didn't start with { or it was totally empty.
+	// Client.ReadJSON call when the request body was empty or
+	// didn't start with { or [.
 	IsErrEmptyJSON = func(err error) bool {
 		if err == nil {
 			return false
@@ -2799,8 +2858,9 @@ var (
 			return v.Offset == 0 && v.Error() == "unexpected end of JSON input"
 		}
 
-		// when optimization is enabled, the jsoniter will report the following error:
-		return strings.Contains(err.Error(), "readObjectStart: expect {")
+		errMsg := err.Error()
+		// 3rd party pacakges:
+		return strings.Contains(errMsg, "readObjectStart: expect {") || strings.Contains(errMsg, "readArrayStart: expect [")
 	}
 
 	// IsErrPath can be used at `context#ReadForm` and `context#ReadQuery`.
@@ -2889,7 +2949,7 @@ const CSRFTokenFormKey = "csrf.token"
 // As of 15 Aug 2022, ReadForm does not return an error over unknown CSRF token form key,
 // to change this behavior globally, set the `context.CSRFTokenFormKey` to an empty value.
 //
-// Example: https://github.com/kataras/iris/blob/master/_examples/request-body/read-form/main.go
+// Example: https://github.com/kataras/iris/blob/main/_examples/request-body/read-form/main.go
 func (ctx *Context) ReadForm(formObject interface{}) error {
 	values := ctx.FormValues()
 	if len(values) == 0 {
@@ -3046,7 +3106,7 @@ func distinctStrings(values []string) []string {
 
 // ReadQuery binds URL Query to "ptr". The struct field tag is "url".
 //
-// Example: https://github.com/kataras/iris/blob/master/_examples/request-body/read-query/main.go
+// Example: https://github.com/kataras/iris/blob/main/_examples/request-body/read-query/main.go
 func (ctx *Context) ReadQuery(ptr interface{}) error {
 	values := ctx.getQuery()
 	if len(values) == 0 {
@@ -3066,7 +3126,7 @@ func (ctx *Context) ReadQuery(ptr interface{}) error {
 
 // ReadHeaders binds request headers to "ptr". The struct field tag is "header".
 //
-// Example: https://github.com/kataras/iris/blob/master/_examples/request-body/read-headers/main.go
+// Example: https://github.com/kataras/iris/blob/main/_examples/request-body/read-headers/main.go
 func (ctx *Context) ReadHeaders(ptr interface{}) error {
 	err := schema.DecodeHeaders(ctx.request.Header, ptr)
 	if err != nil {
@@ -3078,7 +3138,7 @@ func (ctx *Context) ReadHeaders(ptr interface{}) error {
 
 // ReadParams binds URI Dynamic Path Parameters to "ptr". The struct field tag is "param".
 //
-// Example: https://github.com/kataras/iris/blob/master/_examples/request-body/read-params/main.go
+// Example: https://github.com/kataras/iris/blob/main/_examples/request-body/read-params/main.go
 func (ctx *Context) ReadParams(ptr interface{}) error {
 	n := ctx.params.Len()
 	if n == 0 {
@@ -3638,7 +3698,7 @@ func (ctx *Context) ViewEngine(engine ViewEngine) {
 //
 // Look .ViewData and .View too.
 //
-// Example: https://github.com/kataras/iris/tree/master/_examples/view/context-view-data/
+// Example: https://github.com/kataras/iris/tree/main/_examples/view/context-view-data/
 func (ctx *Context) ViewLayout(layoutTmplFile string) {
 	ctx.values.Set(ctx.app.ConfigurationReadOnly().GetViewLayoutContextKey(), layoutTmplFile)
 }
@@ -3660,7 +3720,7 @@ func (ctx *Context) ViewLayout(layoutTmplFile string) {
 //
 // Look .ViewLayout and .View too.
 //
-// Example: https://github.com/kataras/iris/tree/master/_examples/view/context-view-data/
+// Example: https://github.com/kataras/iris/tree/main/_examples/view/context-view-data/
 func (ctx *Context) ViewData(key string, value interface{}) {
 	viewDataContextKey := ctx.app.ConfigurationReadOnly().GetViewDataContextKey()
 	if key == "" {
@@ -3858,7 +3918,7 @@ func (ctx *Context) FallbackView(providers ...FallbackViewProvider) {
 //
 // Look .ViewData and .ViewLayout too.
 //
-// Examples: https://github.com/kataras/iris/tree/master/_examples/view
+// Examples: https://github.com/kataras/iris/tree/main/_examples/view
 func (ctx *Context) View(filename string, optionalViewModel ...interface{}) error {
 	ctx.ContentType(ContentHTMLHeaderValue)
 
@@ -4023,6 +4083,10 @@ type Markdown struct {
 	// content-specific
 	Sanitize         bool
 	OmitErrorHandler bool // See JSON.OmitErrorHandler.
+	//
+	// Library-specific.
+	// E.g. Flags: html.CommonFlags | html.HrefTargetBlank
+	RenderOptions html.RendererOptions
 }
 
 var (
@@ -4163,11 +4227,11 @@ var WriteJSON = func(ctx *Context, v interface{}, options *JSON) error {
 
 // See https://golang.org/src/strings/builder.go#L45
 // func bytesToString(b []byte) string {
-// 	return *(*string)(unsafe.Pointer(&b))
+// 	return unsafe.String(unsafe.SliceData(b), len(b))
 // }
 
 func stringToBytes(s string) []byte {
-	return *(*[]byte)(unsafe.Pointer(&s))
+	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
 type (
@@ -4195,9 +4259,16 @@ func (h ErrorHandlerFunc) HandleContextError(ctx *Context, err error) {
 }
 
 func (ctx *Context) handleContextError(err error) {
+	if err == nil {
+		return
+	}
+
 	if errHandler := ctx.app.GetContextErrorHandler(); errHandler != nil {
 		errHandler.HandleContextError(ctx, err)
 	} else {
+		if ctx.IsDebug() {
+			ctx.app.Logger().Error(err)
+		}
 		ctx.StatusCode(http.StatusInternalServerError)
 	}
 
@@ -4224,6 +4295,28 @@ func (ctx *Context) Render(statusCode int, r interface {
 	}
 }
 
+// Component is the interface which all components must implement.
+// A component is a struct which can be rendered to a writer.
+// It's being used by the `Context.RenderComponent` method.
+// An example of compatible Component is a templ.Component.
+type Component interface {
+	Render(context.Context, io.Writer) error
+}
+
+// RenderComponent renders a component to the client.
+// It sets the "Content-Type" header to "text/html; charset=utf-8".
+// It reports any component render errors back to the caller.
+// Look the Application.SetContextErrorHandler to override the
+// default status code 500 with a custom error response.
+func (ctx *Context) RenderComponent(component Component) error {
+	ctx.ContentType("text/html; charset=utf-8")
+	err := component.Render(ctx.Request().Context(), ctx.ResponseWriter())
+	if err != nil {
+		ctx.handleContextError(err)
+	}
+	return err
+}
+
 // JSON marshals the given "v" value to JSON and writes the response to the client.
 // Look the Configuration.EnableProtoJSON and EnableEasyJSON too.
 //
@@ -4243,8 +4336,8 @@ func (ctx *Context) JSON(v interface{}, opts ...JSON) (err error) {
 	}
 
 	if err = ctx.writeJSON(v, options); err != nil {
-		// if no options are given or OmitErrorHandler is true
-		// then do call the error handler (which may lead to a cycle).
+		// if no options are given or OmitErrorHandler is false
+		// then call the error handler (which may lead to a cycle if the error handler fails to write JSON too).
 		if !options.OmitErrorHandler {
 			ctx.handleContextError(err)
 		}
@@ -4413,7 +4506,7 @@ func (ctx *Context) XML(v interface{}, opts ...XML) (err error) {
 // Use the options.RenderXML and XML fields to change this behavior and
 // send a response of content type "application/problem+xml" instead.
 //
-// Read more at: https://github.com/kataras/iris/wiki/Routing-error-handlers
+// Read more at: https://github.com/kataras/iris/blob/main/_examples/routing/http-errors.
 func (ctx *Context) Problem(v interface{}, opts ...ProblemOptions) error {
 	options := DefaultProblemOptions
 	if len(opts) > 0 {
@@ -4450,14 +4543,20 @@ func (ctx *Context) Problem(v interface{}, opts ...ProblemOptions) error {
 	return ctx.writeJSON(v, &options.JSON)
 }
 
+var sanitizer = bluemonday.UGCPolicy()
+
 // WriteMarkdown parses the markdown to html and writes these contents to the writer.
 var WriteMarkdown = func(ctx *Context, markdownB []byte, options *Markdown) error {
-	buf := blackfriday.Run(markdownB)
+	out := markdown.NormalizeNewlines(markdownB)
+
+	renderer := html.NewRenderer(options.RenderOptions)
+	doc := markdown.Parse(out, nil)
+	out = markdown.Render(doc, renderer)
 	if options.Sanitize {
-		buf = bluemonday.UGCPolicy().SanitizeBytes(buf)
+		out = sanitizer.SanitizeBytes(out)
 	}
 
-	_, err := ctx.Write(buf)
+	_, err := ctx.Write(out)
 	return err
 }
 
@@ -4725,7 +4824,7 @@ func parseHeader(headerValue string) []string {
 //
 // Supports the above without quality values.
 //
-// Read more at: https://github.com/kataras/iris/wiki/Content-negotiation
+// Read more at: https://github.com/kataras/iris/tree/main/_examples/response-writer/content-negotiation
 func (ctx *Context) Negotiate(v interface{}) (int, error) {
 	contentType, charset, encoding, content := ctx.Negotiation().Build()
 	if v == nil {
@@ -5314,7 +5413,7 @@ func (ctx *Context) ServeContent(content io.ReadSeeker, filename string, modtime
 // represents one byte. See "golang.org/x/time/rate" package.
 type rateReadSeeker struct {
 	io.ReadSeeker
-	ctx     stdContext.Context
+	ctx     context.Context
 	limiter *rate.Limiter
 }
 
@@ -5473,10 +5572,39 @@ func CookieIncluded(cookie *http.Cookie, cookieNames []string) bool {
 	return true
 }
 
-var cookieNameSanitizer = strings.NewReplacer("\n", "-", "\r", "-")
+// var cookieNameSanitizer = strings.NewReplacer("\n", "-", "\r", "-")
+//
+// func sanitizeCookieName(n string) string {
+// 	return cookieNameSanitizer.Replace(n)
+// }
 
-func sanitizeCookieName(n string) string {
-	return cookieNameSanitizer.Replace(n)
+// CookieOverride is a CookieOption which overrides the cookie explicitly to the given "cookie".
+//
+// Usage:
+// ctx.RemoveCookie("the_cookie_name", iris.CookieOverride(&http.Cookie{Domain: "example.com"}))
+func CookieOverride(cookie *http.Cookie) CookieOption { // The "Cookie" word method name is reserved as it's used as an alias.
+	return func(_ *Context, c *http.Cookie, op uint8) {
+		if op == OpCookieGet {
+			return
+		}
+
+		*cookie = *c
+	}
+}
+
+// CookieDomain is a CookieOption which sets the cookie's Domain field.
+// If empty then the current domain is used.
+//
+// Usage:
+// ctx.RemoveCookie("the_cookie_name", iris.CookieDomain("example.com"))
+func CookieDomain(domain string) CookieOption {
+	return func(_ *Context, c *http.Cookie, op uint8) {
+		if op == OpCookieGet {
+			return
+		}
+
+		c.Domain = domain
+	}
 }
 
 // CookieAllowReclaim accepts the Context itself.
@@ -5497,29 +5625,13 @@ func CookieAllowReclaim(cookieNames ...string) CookieOption {
 			// perform upsert on request cookies or is it too much and not worth the cost?
 			ctx.Request().AddCookie(c)
 		case OpCookieDel:
-			header := ctx.Request().Header
-
-			if cookiesLine := header.Get("Cookie"); cookiesLine != "" {
-				if cookies := strings.Split(cookiesLine, "; "); len(cookies) > 1 {
-					// more than one cookie here.
-					// select that one and remove it.
-					name := sanitizeCookieName(c.Name)
-
-					for _, nameValue := range cookies {
-						if strings.HasPrefix(nameValue, name) {
-							cookiesLine = strings.Replace(cookiesLine, "; "+nameValue, "", 1)
-							// current cookiesLine: myapp_session_id=5ccf4e89-8d0e-4ed6-9f4c-6746d7c5e2ee; key1=value1
-							// found nameValue: key1=value1
-							// new cookiesLine: myapp_session_id=5ccf4e89-8d0e-4ed6-9f4c-6746d7c5e2ee
-							header.Set("Cookie", cookiesLine)
-							break
-						}
-					}
-					return
+			cookies := ctx.Request().Cookies()
+			ctx.Request().Header.Del("Cookie")
+			for i, v := range cookies {
+				if v.Name != c.Name {
+					ctx.Request().AddCookie(cookies[i])
 				}
 			}
-
-			header.Del("Cookie")
 		}
 	}
 }
@@ -5646,7 +5758,7 @@ type SecureCookie interface {
 // with that `Name` will be encoded on set and decoded on get, that way you can encrypt
 // specific cookie names (like the session id) and let the rest of the cookies "insecure".
 //
-// Example: https://github.com/kataras/iris/tree/master/_examples/cookies/securecookie
+// Example: https://github.com/kataras/iris/tree/main/_examples/cookies/securecookie
 func CookieEncoding(encoding SecureCookie, cookieNames ...string) CookieOption {
 	if encoding == nil {
 		return func(_ *Context, _ *http.Cookie, _ uint8) {}
@@ -5690,6 +5802,8 @@ const cookieOptionsContextKey = "iris.cookie.options"
 // cookies sent or received from the next Handler in the chain.
 //
 // Available builtin Cookie options are:
+//   - CookieOverride
+//   - CookieDomain
 //   - CookieAllowReclaim
 //   - CookieAllowSubdomains
 //   - CookieSecure
@@ -5700,7 +5814,7 @@ const cookieOptionsContextKey = "iris.cookie.options"
 //   - CookieExpires
 //   - CookieEncoding
 //
-// Example at: https://github.com/kataras/iris/tree/master/_examples/cookies/securecookie
+// Example at: https://github.com/kataras/iris/tree/main/_examples/cookies/securecookie
 func (ctx *Context) AddCookieOptions(options ...CookieOption) {
 	if len(options) == 0 {
 		return
@@ -5740,7 +5854,7 @@ func (ctx *Context) ClearCookieOptions() {
 // SetCookie adds a cookie.
 // Use of the "options" is not required, they can be used to amend the "cookie".
 //
-// Example: https://github.com/kataras/iris/tree/master/_examples/cookies/basic
+// Example: https://github.com/kataras/iris/tree/main/_examples/cookies/basic
 func (ctx *Context) SetCookie(cookie *http.Cookie, options ...CookieOption) {
 	ctx.applyCookieOptions(cookie, OpCookieSet, options)
 	http.SetCookie(ctx.writer, cookie)
@@ -5810,7 +5924,7 @@ var SetCookieKVExpiration = 8760 * time.Hour
 //	iris.CookieExpires(time.Duration)
 //	iris.CookieHTTPOnly(false)
 //
-// Examples: https://github.com/kataras/iris/tree/master/_examples/cookies/basic
+// Examples: https://github.com/kataras/iris/tree/main/_examples/cookies/basic
 func (ctx *Context) SetCookieKV(name, value string, options ...CookieOption) {
 	c := &http.Cookie{}
 	c.Path = "/"
@@ -5833,7 +5947,7 @@ func (ctx *Context) SetCookieKV(name, value string, options ...CookieOption) {
 // If you want more than the value then:
 // cookie, err := ctx.GetRequestCookie("name")
 //
-// Example: https://github.com/kataras/iris/tree/master/_examples/cookies/basic
+// Example: https://github.com/kataras/iris/tree/main/_examples/cookies/basic
 func (ctx *Context) GetCookie(name string, options ...CookieOption) string {
 	c, err := ctx.GetRequestCookie(name, options...)
 	if err != nil {
@@ -5857,28 +5971,35 @@ func (ctx *Context) GetRequestCookie(name string, options ...CookieOption) (*htt
 
 var (
 	// CookieExpireDelete may be set on Cookie.Expire for expiring the given cookie.
-	CookieExpireDelete = time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
+	CookieExpireDelete = memstore.ExpireDelete
 
 	// CookieExpireUnlimited indicates that does expires after 24 years.
 	CookieExpireUnlimited = time.Now().AddDate(24, 10, 10)
 )
 
 // RemoveCookie deletes a cookie by its name and path = "/".
-// Tip: change the cookie's path to the current one by: RemoveCookie("name", iris.CookieCleanPath)
+// Tip: change the cookie's path to the current one by: RemoveCookie("the_cookie_name", iris.CookieCleanPath)
 //
-// Example: https://github.com/kataras/iris/tree/master/_examples/cookies/basic
+// If you intend to remove a cookie with a specific domain and value, please ensure to pass these values explicitly:
+//
+//	ctx.RemoveCookie("the_cookie_name", iris.CookieDomain("example.com"), iris.CookiePath("/"))
+//
+// OR use a Cookie value instead:
+//
+//	ctx.RemoveCookie("the_cookie_name", iris.CookieOverride(&http.Cookie{Domain: "example.com", Path: "/"}))
+//
+// Example: https://github.com/kataras/iris/tree/main/_examples/cookies/basic
 func (ctx *Context) RemoveCookie(name string, options ...CookieOption) {
-	c := &http.Cookie{}
+	c := &http.Cookie{Path: "/"}
+	// Send the cookie back to the client
+	ctx.applyCookieOptions(c, OpCookieDel, options)
 	c.Name = name
 	c.Value = ""
-	c.Path = "/" // if user wants to change it, use of the CookieOption `CookiePath` is required if not `ctx.SetCookie`.
 	c.HttpOnly = true
-
-	// RFC says 1 second, but let's do it 1  to make sure is working
+	// Set the cookie expiration date to a past time
 	c.Expires = CookieExpireDelete
-	c.MaxAge = -1
+	c.MaxAge = -1 // RFC says 1 second, but let's do it -1  to make sure is working.
 
-	ctx.applyCookieOptions(c, OpCookieDel, options)
 	http.SetCookie(ctx.writer, c)
 }
 
@@ -5961,7 +6082,7 @@ func (ctx *Context) IsRecording() (*ResponseRecorder, bool) {
 //
 // app.None(...) and app.GetRoutes().Offline(route)/.Online(route, method)
 //
-// Example: https://github.com/kataras/iris/tree/master/_examples/routing/route-state
+// Example: https://github.com/kataras/iris/tree/main/_examples/routing/route-state
 //
 // User can get the response by simple using rec := ctx.Recorder(); rec.Body()/rec.StatusCode()/rec.Header().
 //
@@ -6212,11 +6333,13 @@ func (ctx *Context) GetErrPublic() (bool, error) {
 // which recovers from a manual panic.
 type ErrPanicRecovery struct {
 	ErrPrivate
-	Cause              interface{}
-	Callers            []string // file:line callers.
-	Stack              []byte   // the full debug stack.
-	RegisteredHandlers []string // file:line of all registered handlers.
-	CurrentHandler     string   // the handler panic came from.
+	Cause                  interface{}
+	Callers                []string // file:line callers.
+	Stack                  []byte   // the full debug stack.
+	RegisteredHandlers     []string // file:line of all registered handlers.
+	CurrentHandlerFileLine string   // the handler panic came from.
+	CurrentHandlerName     string   // the handler name panic came from.
+	Request                string   // the http dumped request.
 }
 
 // Error implements the Go standard error type.
@@ -6227,13 +6350,22 @@ func (e *ErrPanicRecovery) Error() string {
 		}
 	}
 
-	return fmt.Sprintf("%v\n%s", e.Cause, strings.Join(e.Callers, "\n"))
+	return fmt.Sprintf("%v\n%s\nRequest:\n%s", e.Cause, strings.Join(e.Callers, "\n"), e.Request)
 }
 
 // Is completes the internal errors.Is interface.
 func (e *ErrPanicRecovery) Is(err error) bool {
 	_, ok := IsErrPanicRecovery(err)
 	return ok
+}
+
+func (e *ErrPanicRecovery) LogMessage() string {
+	logMessage := fmt.Sprintf("Recovered from a route's Handler('%s')\n", e.CurrentHandlerName)
+	logMessage += fmt.Sprint(e.Request)
+	logMessage += fmt.Sprintf("%s\n", e.Cause)
+	logMessage += fmt.Sprintf("%s\n", strings.Join(e.Callers, "\n"))
+
+	return logMessage
 }
 
 // IsErrPanicRecovery reports whether the given "err" is a type of ErrPanicRecovery.
@@ -6286,7 +6418,7 @@ const (
 // See its `CallFunc` to call the "fn" on the next handler.
 //
 // Example at:
-// https://github.com/kataras/iris/tree/master/_examples/routing/writing-a-middleware/share-funcs
+// https://github.com/kataras/iris/tree/main/_examples/routing/writing-a-middleware/share-funcs
 func (ctx *Context) SetFunc(name string, fn interface{}, persistenceArgs ...interface{}) {
 	f := newFunc(name, fn, persistenceArgs...)
 	ctx.values.Set(funcsContextPrefixKey+name, f)
@@ -6403,7 +6535,7 @@ func (ctx *Context) User() User {
 }
 
 // Ensure Iris Context implements the standard Context package, build-time.
-var _ stdContext.Context = (*Context)(nil)
+var _ context.Context = (*Context)(nil)
 
 // Deadline returns the time when work done on behalf of this context
 // should be canceled. Deadline returns ok==false when no deadline is

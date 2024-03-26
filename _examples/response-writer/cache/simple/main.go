@@ -29,6 +29,10 @@ func main() {
 	app := iris.New()
 	app.Logger().SetLevel("debug")
 	app.Get("/", cache.Handler(10*time.Second), writeMarkdown)
+	// To customize the cache handler:
+	// cache.Cache(nil).MaxAge(func(ctx iris.Context) time.Duration {
+	// 	return time.Duration(ctx.MaxAge()) * time.Second
+	// }).AddRule(...).Store(...)
 	// saves its content on the first request and serves it instead of re-calculating the content.
 	// After 10 seconds it will be cleared and reset.
 
@@ -93,6 +97,6 @@ func customIndexPost(ctx iris.Context) {
 /* Note that `HandleDir` does use the browser's disk caching by-default
 therefore, register the cache handler AFTER any HandleDir calls,
 for a faster solution that server doesn't need to keep track of the response
-navigate to https://github.com/kataras/iris/blob/master/_examples/cache/client-side/main.go.
+navigate to https://github.com/kataras/iris/blob/main/_examples/cache/client-side/main.go.
 
 The `HandleDir` has its own cache mechanism, read the 'file-server' examples. */

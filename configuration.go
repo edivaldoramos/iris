@@ -216,6 +216,13 @@ func WithTimeout(timeoutDur time.Duration, htmlBody ...string) Configurator {
 	}
 }
 
+// NonBlocking sets the `Configuration.NonBlocking` field to true.
+func NonBlocking() Configurator {
+	return func(app *Application) {
+		app.config.NonBlocking = true
+	}
+}
+
 // WithoutServerError will cause to ignore the matched "errors"
 // from the main application's `Run/Listen` function.
 //
@@ -225,7 +232,7 @@ func WithTimeout(timeoutDur time.Duration, htmlBody ...string) Configurator {
 //
 // See `Configuration#IgnoreServerErrors []string` too.
 //
-// Example: https://github.com/kataras/iris/tree/master/_examples/http-server/listen-addr/omit-server-errors
+// Example: https://github.com/kataras/iris/tree/main/_examples/http-server/listen-addr/omit-server-errors
 func WithoutServerError(errors ...error) Configurator {
 	return func(app *Application) {
 		if len(errors) == 0 {
@@ -308,6 +315,14 @@ var WithLowercaseRouting = func(app *Application) {
 	app.config.ForceLowercaseRouting = true
 }
 
+// WithDynamicHandler enables for dynamic routing by
+// setting the `EnableDynamicHandler` to true.
+//
+// See `Configuration`.
+var WithDynamicHandler = func(app *Application) {
+	app.config.EnableDynamicHandler = true
+}
+
 // WithOptimizations can force the application to optimize for the best performance where is possible.
 //
 // See `Configuration`.
@@ -348,6 +363,15 @@ var WithoutAutoFireStatusCode = func(app *Application) {
 // See `Configuration`.
 var WithResetOnFireErrorCode = func(app *Application) {
 	app.config.ResetOnFireErrorCode = true
+}
+
+// WithURLParamSeparator sets the URLParamSeparator setting to "sep".
+//
+// See `Configuration`.
+var WithURLParamSeparator = func(sep string) Configurator {
+	return func(app *Application) {
+		app.config.URLParamSeparator = &sep
+	}
 }
 
 // WithTimeFormat sets the TimeFormat setting.
@@ -485,7 +509,7 @@ func WithOtherValue(key string, val interface{}) Configurator {
 // If the result does not complete your needs you can take control
 // and use the github.com/kataras/sitemap package to generate a customized one instead.
 //
-// Example: https://github.com/kataras/iris/tree/master/_examples/sitemap.
+// Example: https://github.com/kataras/iris/tree/main/_examples/sitemap.
 func WithSitemap(startURL string) Configurator {
 	sitemaps := sitemap.New(startURL)
 	return func(app *Application) {
@@ -660,6 +684,10 @@ type Configuration struct {
 	// TimeoutMessage specifies the HTML body when a handler hits its life time based
 	// on the Timeout configuration field.
 	TimeoutMessage string `ini:"timeout_message" json:"timeoutMessage" yaml:"TimeoutMessage" toml:"TimeoutMessage"`
+	// NonBlocking, if set to true then the server will start listening for incoming connections
+	// without blocking the main goroutine. Use the Application.Wait method to block and wait for the server to be up and running.
+	NonBlocking bool `ini:"non_blocking" json:"nonBlocking" yaml:"NonBlocking" toml:"NonBlocking"`
+
 	// Tunneling can be optionally set to enable ngrok http(s) tunneling for this Iris app instance.
 	// See the `WithTunneling` Configurator too.
 	Tunneling TunnelingConfiguration `ini:"tunneling" json:"tunneling,omitempty" yaml:"Tunneling" toml:"Tunneling"`
@@ -671,7 +699,7 @@ type Configuration struct {
 	//
 	// See `WithoutServerError(...)` function too.
 	//
-	// Example: https://github.com/kataras/iris/tree/master/_examples/http-server/listen-addr/omit-server-errors
+	// Example: https://github.com/kataras/iris/tree/main/_examples/http-server/listen-addr/omit-server-errors
 	//
 	// Defaults to an empty slice.
 	IgnoreServerErrors []string `ini:"ignore_server_errors" json:"ignoreServerErrors,omitempty" yaml:"IgnoreServerErrors" toml:"IgnoreServerErrors"`
@@ -728,6 +756,14 @@ type Configuration struct {
 	//
 	// Defaults to false.
 	ForceLowercaseRouting bool `ini:"force_lowercase_routing" json:"forceLowercaseRouting,omitempty" yaml:"ForceLowercaseRouting" toml:"ForceLowercaseRouting"`
+	// EnableOptimizations enables dynamic request handler.
+	// It gives the router the feature to add routes while in serve-time,
+	// when `RefreshRouter` is called.
+	// If this setting is set to true, the request handler will use a mutex for data(trie routing) protection,
+	// hence the performance cost.
+	//
+	// Defaults to false.
+	EnableDynamicHandler bool `ini:"enable_dynamic_handler" json:"enableDynamicHandler,omitempty" yaml:"EnableDynamicHandler" toml:"EnableDynamicHandler"`
 	// FireMethodNotAllowed if it's true router checks for StatusMethodNotAllowed(405) and
 	//  fires the 405 error instead of 404
 	// Defaults to false.
@@ -748,6 +784,11 @@ type Configuration struct {
 	// Defaults to false.
 	ResetOnFireErrorCode bool `ini:"reset_on_fire_error_code" json:"resetOnFireErrorCode,omitempty" yaml:"ResetOnFireErrorCode" toml:"ResetOnFireErrorCode"`
 
+	// URLParamSeparator defines the character(s) separator for Context.URLParamSlice.
+	// If empty or null then request url parameters with comma separated values will be retrieved as one.
+	//
+	// Defaults to comma ",".
+	URLParamSeparator *string `ini:"url_param_separator" json:"urlParamSeparator,omitempty" yaml:"URLParamSeparator" toml:"URLParamSeparator"`
 	// EnableOptimization when this field is true
 	// then the application tries to optimize for the best performance where is possible.
 	//
@@ -939,9 +980,15 @@ type Configuration struct {
 
 var _ context.ConfigurationReadOnly = (*Configuration)(nil)
 
-// GetVHost returns the non-exported vhost config field.
+// GetVHost returns the VHost config field.
 func (c *Configuration) GetVHost() string {
-	return c.VHost
+	vhost := c.VHost
+	return vhost
+}
+
+// SetVHost sets the VHost config field.
+func (c *Configuration) SetVHost(s string) {
+	c.VHost = s
 }
 
 // GetLogLevel returns the LogLevel field.
@@ -962,6 +1009,11 @@ func (c *Configuration) GetKeepAlive() time.Duration {
 // GetTimeout returns the Timeout field.
 func (c *Configuration) GetTimeout() time.Duration {
 	return c.Timeout
+}
+
+// GetNonBlocking returns the NonBlocking field.
+func (c *Configuration) GetNonBlocking() bool {
+	return c.NonBlocking
 }
 
 // GetTimeoutMessage returns the TimeoutMessage field.
@@ -992,6 +1044,11 @@ func (c *Configuration) GetEnablePathEscape() bool {
 // GetForceLowercaseRouting returns the ForceLowercaseRouting field.
 func (c *Configuration) GetForceLowercaseRouting() bool {
 	return c.ForceLowercaseRouting
+}
+
+// GetEnableDynamicHandler returns the EnableDynamicHandler field.
+func (c *Configuration) GetEnableDynamicHandler() bool {
+	return c.EnableDynamicHandler
 }
 
 // GetFireMethodNotAllowed returns the FireMethodNotAllowed field.
@@ -1032,6 +1089,11 @@ func (c *Configuration) GetDisableAutoFireStatusCode() bool {
 // GetResetOnFireErrorCode returns ResetOnFireErrorCode field.
 func (c *Configuration) GetResetOnFireErrorCode() bool {
 	return c.ResetOnFireErrorCode
+}
+
+// GetURLParamSeparator returns URLParamSeparator field.
+func (c *Configuration) GetURLParamSeparator() *string {
+	return c.URLParamSeparator
 }
 
 // GetTimeFormat returns the TimeFormat field.
@@ -1161,6 +1223,10 @@ func WithConfiguration(c Configuration) Configurator {
 			main.TimeoutMessage = v
 		}
 
+		if v := c.NonBlocking; v {
+			main.NonBlocking = v
+		}
+
 		if len(c.Tunneling.Tunnels) > 0 {
 			main.Tunneling = c.Tunneling
 		}
@@ -1219,6 +1285,10 @@ func WithConfiguration(c Configuration) Configurator {
 
 		if v := c.ResetOnFireErrorCode; v {
 			main.ResetOnFireErrorCode = v
+		}
+
+		if v := c.URLParamSeparator; v != nil {
+			main.URLParamSeparator = v
 		}
 
 		if v := c.DisableBodyConsumptionOnUnmarshal; v {
@@ -1319,6 +1389,10 @@ func WithConfiguration(c Configuration) Configurator {
 // on expired handlers when timeout handler is registered (see Timeout configuration field).
 var DefaultTimeoutMessage = `<html><head><title>Timeout</title></head><body><h1>Timeout</h1>Looks like the server is taking too long to respond, this can be caused by either poor connectivity or an error with our servers. Please try again in a while.</body></html>`
 
+func toStringPtr(s string) *string {
+	return &s
+}
+
 // DefaultConfiguration returns the default configuration for an iris station, fills the main Configuration
 func DefaultConfiguration() Configuration {
 	return Configuration{
@@ -1327,6 +1401,7 @@ func DefaultConfiguration() Configuration {
 		KeepAlive:                         0,
 		Timeout:                           0,
 		TimeoutMessage:                    DefaultTimeoutMessage,
+		NonBlocking:                       false,
 		DisableStartupLog:                 false,
 		DisableInterruptHandler:           false,
 		DisablePathCorrection:             false,
@@ -1336,6 +1411,8 @@ func DefaultConfiguration() Configuration {
 		DisableBodyConsumptionOnUnmarshal: false,
 		FireEmptyFormError:                false,
 		DisableAutoFireStatusCode:         false,
+		ResetOnFireErrorCode:              false,
+		URLParamSeparator:                 toStringPtr(","),
 		TimeFormat:                        "Mon, 02 Jan 2006 15:04:05 GMT",
 		Charset:                           "utf-8",
 

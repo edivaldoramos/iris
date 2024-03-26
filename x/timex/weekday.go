@@ -80,6 +80,7 @@ func BackwardsToMonday(end time.Time) []time.Time {
 	return dates
 }
 
+// GetWeekDate returns the date of the given weekday (monday, tuesday, etc.) of the current week.
 func GetWeekDate(now time.Time, weekday, start, end time.Weekday) time.Time {
 	dates := GetWeekdays(now, start, end)
 	for _, d := range dates {
@@ -113,6 +114,18 @@ func GetWeekdays(now time.Time, startWeekday, endWeekday time.Weekday) (dates []
 // GetMonthStart returns the date of the first month day of the current now's month.
 func GetMonthStart(now time.Time) time.Time {
 	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+}
+
+// GetMonthEnd returns the date of the last month day of the current now's month.
+func GetMonthEnd(now time.Time) time.Time {
+	now = now.UTC()
+	// Add one month to the current date and subtract one day
+	return time.Date(now.Year(), now.Month()+1, 0, 0, 0, 0, 0, now.Location())
+}
+
+// GetMonthDays returns the range between first and last days the current month.
+func GetMonthDays(now time.Time) (dates []time.Time) {
+	return Between(GetMonthStart(now), GetMonthEnd(now))
 }
 
 // GetYearStart returns the date of the first year of the current now's year.

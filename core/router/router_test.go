@@ -69,9 +69,9 @@ func TestLowercaseRouting(t *testing.T) {
 	e := httptest.New(t, app)
 	for _, tt := range tests {
 		s := strings.ToLower(tt)
-		e.GET(tt).Expect().Status(httptest.StatusOK).Body().Equal(s)
-		e.GET(s).Expect().Status(httptest.StatusOK).Body().Equal(s)
-		e.GET(strings.ToUpper(tt)).Expect().Status(httptest.StatusOK).Body().Equal(s)
+		e.GET(tt).Expect().Status(httptest.StatusOK).Body().IsEqual(s)
+		e.GET(s).Expect().Status(httptest.StatusOK).Body().IsEqual(s)
+		e.GET(strings.ToUpper(tt)).Expect().Status(httptest.StatusOK).Body().IsEqual(s)
 	}
 }
 
@@ -156,7 +156,7 @@ func TestRouterWrapperOrder(t *testing.T) {
 		app.Get("/", func(ctx iris.Context) {}) // to not append the not found one.
 
 		e := httptest.New(t, app)
-		e.GET("/").Expect().Status(iris.StatusOK).Body().Equal(expectedOrderStr)
+		e.GET("/").Expect().Status(iris.StatusOK).Body().IsEqual(expectedOrderStr)
 	}
 }
 
@@ -190,9 +190,30 @@ func TestNewSubdomainPartyRedirectHandler(t *testing.T) {
 	}
 
 	e := httptest.New(t, app)
-	e.GET("/").WithURL("http://mydomain.com").Expect().Status(iris.StatusOK).Body().Equal("root index")
-	e.GET("/").WithURL("http://test.mydomain.com").Expect().Status(iris.StatusOK).Body().Equal("test index")
-	e.GET("/").WithURL("http://testold.mydomain.com").Expect().Status(iris.StatusOK).Body().Equal("test index")
-	e.GET("/").WithURL("http://testold.mydomain.com/notfound").Expect().Status(iris.StatusNotFound).Body().Equal("test 404")
-	e.GET("/").WithURL("http://leveled.testold.mydomain.com").Expect().Status(iris.StatusOK).Body().Equal("leveled.testold this can be fired")
+	e.GET("/").WithURL("http://mydomain.com").Expect().Status(iris.StatusOK).Body().IsEqual("root index")
+	e.GET("/").WithURL("http://test.mydomain.com").Expect().Status(iris.StatusOK).Body().IsEqual("test index")
+	e.GET("/").WithURL("http://testold.mydomain.com").Expect().Status(iris.StatusOK).Body().IsEqual("test index")
+	e.GET("/").WithURL("http://testold.mydomain.com/notfound").Expect().Status(iris.StatusNotFound).Body().IsEqual("test 404")
+	e.GET("/").WithURL("http://leveled.testold.mydomain.com").Expect().Status(iris.StatusOK).Body().IsEqual("leveled.testold this can be fired")
+}
+
+func TestHandleServer(t *testing.T) {
+	otherApp := iris.New()
+	otherApp.Get("/test/me/{first:string}", func(ctx iris.Context) {
+		ctx.HTML("<h1>Other App: %s</h1>", ctx.Params().Get("first"))
+	})
+	otherApp.Build()
+
+	app := iris.New()
+
+	app.Get("/", func(ctx iris.Context) {
+		ctx.HTML("<h1>Main App</h1>")
+	})
+
+	app.HandleServer("/api/identity/{first:string}/orgs/{second:string}/{p:path}", otherApp)
+
+	e := httptest.New(t, app)
+	e.GET("/").Expect().Status(iris.StatusOK).Body().IsEqual("<h1>Main App</h1>")
+	e.GET("/api/identity/first/orgs/second/test/me/kataras").Expect().Status(iris.StatusOK).Body().IsEqual("<h1>Other App: kataras</h1>")
+	e.GET("/api/identity/first/orgs/second/test/me").Expect().Status(iris.StatusNotFound)
 }

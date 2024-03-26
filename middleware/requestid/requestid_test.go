@@ -55,9 +55,17 @@ func TestRequestID(t *testing.T) {
 		changeID.Get("/", h)
 	}
 
+	const expectedClientSentID = "client sent id"
+	clientSentID := app.Party("/client_id")
+	{
+		clientSentID.Use(requestid.New())
+		clientSentID.Get("/", h)
+	}
+
 	e := httptest.New(t, app)
 	e.GET("/default").Expect().Status(httptest.StatusOK).Body().NotEmpty()
-	e.GET("/custom").Expect().Status(httptest.StatusOK).Body().Equal(expectedCustomID)
-	e.GET("/custom_err").Expect().Status(httptest.StatusUnauthorized).Body().Equal(expectedErrMsg)
-	e.GET("/custom_change_id").Expect().Status(httptest.StatusOK).Body().Equal(expectedCustomIDFromOtherMiddleware)
+	e.GET("/custom").Expect().Status(httptest.StatusOK).Body().IsEqual(expectedCustomID)
+	e.GET("/custom_err").Expect().Status(httptest.StatusUnauthorized).Body().IsEqual(expectedErrMsg)
+	e.GET("/custom_change_id").Expect().Status(httptest.StatusOK).Body().IsEqual(expectedCustomIDFromOtherMiddleware)
+	e.GET("/client_id").WithHeader("X-Request-Id", expectedClientSentID).Expect().Header("X-Request-Id").IsEqual(expectedClientSentID)
 }

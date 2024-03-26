@@ -24,6 +24,8 @@ type ConfigurationReadOnly interface {
 	GetTimeout() time.Duration
 	// GetTimeoutMessage returns the TimeoutMessage field.
 	GetTimeoutMessage() string
+	// GetNonBlocking returns the NonBlocking field.
+	GetNonBlocking() bool
 	// GetDisablePathCorrection returns the DisablePathCorrection field
 	GetDisablePathCorrection() bool
 	// GetDisablePathCorrectionRedirection returns the DisablePathCorrectionRedirection field.
@@ -34,13 +36,16 @@ type ConfigurationReadOnly interface {
 	GetEnablePathEscape() bool
 	// GetForceLowercaseRouting returns the ForceLowercaseRouting field.
 	GetForceLowercaseRouting() bool
+	// GetEnableOptimizations returns the EnableDynamicHandler field.
+	GetEnableDynamicHandler() bool
 	// GetFireMethodNotAllowed returns the FireMethodNotAllowed field.
 	GetFireMethodNotAllowed() bool
 	// GetDisableAutoFireStatusCode returns the DisableAutoFireStatusCode field.
 	GetDisableAutoFireStatusCode() bool
 	// GetResetOnFireErrorCode returns the ResetOnFireErrorCode field.
 	GetResetOnFireErrorCode() bool
-
+	// GetURLParamSeparator returns URLParamSeparator field.
+	GetURLParamSeparator() *string
 	// GetEnableOptimizations returns the EnableOptimizations field.
 	GetEnableOptimizations() bool
 	// GetEnableProtoJSON returns the EnableProtoJSON field.

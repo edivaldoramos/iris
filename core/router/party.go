@@ -119,7 +119,7 @@ type Party interface {
 	// Macros returns the macro collection that is responsible
 	// to register custom macros with their own parameter types and their macro functions for all routes.
 	//
-	// Learn more at:  https://github.com/kataras/iris/tree/master/_examples/routing/dynamic-path
+	// Learn more at:  https://github.com/kataras/iris/tree/main/_examples/routing/dynamic-path
 	Macros() *macro.Macros
 
 	// Properties returns the original Party's properties map,
@@ -234,6 +234,8 @@ type Party interface {
 	// Done appends to the very end, Handler(s) to the current Party's routes and child routes.
 	// The difference from .Use is that this/or these Handler(s) are being always running last.
 	Done(handlers ...context.Handler)
+	// MiddlewareExists reports whether the given handler exists in the middleware chain.
+	MiddlewareExists(handlerNameOrFunc any) bool
 	// RemoveHandler deletes a handler from begin and done handlers
 	// based on its name or the handler pc function.
 	//
@@ -285,7 +287,7 @@ type Party interface {
 	//
 	// Returns this Party.
 	//
-	// Example: https://github.com/kataras/iris/tree/master/_examples/mvc/middleware/without-ctx-next
+	// Example: https://github.com/kataras/iris/tree/main/_examples/mvc/middleware/without-ctx-next
 	SetExecutionRules(executionRules ExecutionRules) Party
 	// SetRegisterRule sets a `RouteRegisterRule` for this Party and its children.
 	// Available values are:
@@ -335,7 +337,7 @@ type Party interface {
 	// HandleDir("/public", iris.Dir("./assets"), DirOptions{...})
 	//
 	// Examples:
-	// https://github.com/kataras/iris/tree/master/_examples/file-server
+	// https://github.com/kataras/iris/tree/main/_examples/file-server
 	HandleDir(requestPath string, fileSystem interface{}, opts ...DirOptions) []*Route
 
 	// None registers an "offline" route
@@ -393,6 +395,17 @@ type Party interface {
 	// Connect
 	// Trace
 	Any(registeredPath string, handlers ...context.Handler) []*Route
+	// HandleServer registers a route for all HTTP methods which forwards the requests to the given server.
+	//
+	// Usage:
+	//
+	//	app.HandleServer("/api/identity/{first:string}/orgs/{second:string}/{p:path}", otherApp)
+	//
+	// OR
+	//
+	//	app.HandleServer("/api/identity", otherApp)
+	HandleServer(path string, server ServerHandler)
+
 	// CreateRoutes returns a list of Party-based Routes.
 	// It does NOT registers the route. Use `Handle, Get...` methods instead.
 	// This method can be used for third-parties Iris helpers packages and tools
@@ -452,9 +465,12 @@ type Party interface {
 	// app.RegisterView(iris.$VIEW_ENGINE("./views", ".$extension"))
 	// my := app.Party("/my").Layout("layouts/mylayout.html")
 	// 	my.Get("/", func(ctx iris.Context) {
-	// 		ctx.View("page1.html")
+	// 	if err := ctx.View("page1.html"); err != nil {
+	//	  ctx.HTML("<h3>%s</h3>", err.Error())
+	//	  return
+	//  }
 	// 	})
 	//
-	// Examples: https://github.com/kataras/iris/tree/master/_examples/view
+	// Examples: https://github.com/kataras/iris/tree/main/_examples/view
 	Layout(tmplLayoutFile string) Party
 }

@@ -46,7 +46,7 @@ type (
 	// Developers get request information from the client's request by a Context.
 	Context = *context.Context
 	// ViewEngine is an alias of `context.ViewEngine`.
-	// See HTML, Blocks, Django, Jet, Pug, Ace, Handlebars, Amber and e.t.c.
+	// See HTML, Blocks, Django, Jet, Pug, Ace, Handlebars and e.t.c.
 	ViewEngine = context.ViewEngine
 	// UnmarshalerFunc a shortcut, an alias for the `context#UnmarshalerFunc` type
 	// which implements the `context#Unmarshaler` interface for reading request's body
@@ -56,7 +56,7 @@ type (
 	//
 	// See 'context#UnmarshalBody` for more.
 	//
-	// Example: https://github.com/kataras/iris/blob/master/_examples/request-body/read-custom-via-unmarshaler/main.go
+	// Example: https://github.com/kataras/iris/blob/main/_examples/request-body/read-custom-via-unmarshaler/main.go
 	UnmarshalerFunc = context.UnmarshalerFunc
 	// DecodeFunc is a generic type of decoder function.
 	// When the returned error is not nil the decode operation
@@ -64,7 +64,7 @@ type (
 	// otherwise it continues to read the next available object.
 	// Look the `Context.ReadJSONStream` method.
 	//
-	// Example: https://github.com/kataras/iris/blob/master/_examples/request-body/read-json-stream.
+	// Example: https://github.com/kataras/iris/blob/main/_examples/request-body/read-json-stream.
 	DecodeFunc = context.DecodeFunc
 	// A Handler responds to an HTTP request.
 	// It writes reply headers and data to the Context.ResponseWriter() and then return.
@@ -99,7 +99,7 @@ type (
 	// Pass a Problem value to `context.Problem` to
 	// write an "application/problem+json" response.
 	//
-	// Read more at: https://github.com/kataras/iris/wiki/Routing-error-handlers
+	// Read more at: https://github.com/kataras/iris/blob/main/_examples/routing/http-errors.
 	//
 	// It is an alias of the `context#Problem` type.
 	Problem = context.Problem
@@ -180,7 +180,7 @@ type (
 	// })
 	//
 	// See `core/router/Party#SetExecutionRules` for more.
-	// Example: https://github.com/kataras/iris/tree/master/_examples/mvc/middleware/without-ctx-next
+	// Example: https://github.com/kataras/iris/tree/main/_examples/mvc/middleware/without-ctx-next
 	ExecutionRules = router.ExecutionRules
 	// ExecutionOptions is a set of default behaviors that can be changed in order to customize the execution flow of the routes' handlers with ease.
 	//
@@ -267,9 +267,6 @@ var (
 	// Pug view engine.
 	// Shortcut of the view.Pug.
 	Pug = view.Pug
-	// Amber view engine.
-	// Shortcut of the view.Amber.
-	Amber = view.Amber
 	// Jet view engine.
 	// Shortcut of the view.Jet.
 	Jet = view.Jet
@@ -296,6 +293,14 @@ type (
 	FallbackViewLayout = context.FallbackViewLayout
 )
 
+// Component returns a new Handler which can be registered as a main handler for a route.
+// It's a shortcut handler that renders the given component as HTML through Context.RenderComponent.
+func Component(component context.Component) Handler {
+	return func(ctx Context) {
+		ctx.RenderComponent(component)
+	}
+}
+
 // PrefixDir returns a new FileSystem that opens files
 // by adding the given "prefix" to the directory tree of "fs".
 //
@@ -305,7 +310,7 @@ type (
 // All view engines have a `RootDir` method for that reason too
 // but alternatively, you can wrap the given file system with this `PrefixDir`.
 //
-// Example: https://github.com/kataras/iris/blob/master/_examples/file-server/single-page-application/embedded-single-page-application/main.go
+// Example: https://github.com/kataras/iris/blob/main/_examples/file-server/single-page-application/embedded-single-page-application/main.go
 func PrefixDir(prefix string, fs http.FileSystem) http.FileSystem {
 	return &prefixedDir{prefix, fs}
 }
@@ -339,18 +344,18 @@ func ConfigureMiddleware(handlers ...Handler) router.PartyConfigurator {
 	return &partyConfiguratorMiddleware{handlers: handlers}
 }
 
-var (
-	// Compression is a middleware which enables
-	// writing and reading using the best offered compression.
-	// Usage:
-	// app.Use (for matched routes)
-	// app.UseRouter (for both matched and 404s or other HTTP errors).
-	Compression = func(ctx Context) {
-		ctx.CompressWriter(true)
-		ctx.CompressReader(true)
-		ctx.Next()
-	}
+// Compression is a middleware which enables
+// writing and reading using the best offered compression.
+// Usage:
+// app.Use (for matched routes)
+// app.UseRouter (for both matched and 404s or other HTTP errors).
+func Compression(ctx Context) {
+	ctx.CompressWriter(true)
+	ctx.CompressReader(true)
+	ctx.Next()
+}
 
+var (
 	// AllowQuerySemicolons returns a middleware that serves requests by converting any
 	// unescaped semicolons(;) in the URL query to ampersands(&).
 	//
@@ -428,7 +433,7 @@ var (
 	// The second optional parameter is any optional settings that the caller can use.
 	//
 	// See `Party#HandleDir` too.
-	// Examples can be found at: https://github.com/kataras/iris/tree/master/_examples/file-server
+	// Examples can be found at: https://github.com/kataras/iris/tree/main/_examples/file-server
 	// A shortcut for the `router.FileServer`.
 	FileServer = router.FileServer
 	// DirList is the default `DirOptions.DirList` field.
@@ -464,7 +469,7 @@ var (
 	// It should be used after Static methods.
 	// See `iris#Cache304` for an alternative, faster way.
 	//
-	// Examples can be found at: https://github.com/kataras/iris/tree/master/_examples/#caching
+	// Examples can be found at: https://github.com/kataras/iris/tree/main/_examples/#caching
 	Cache = cache.Handler
 	// NoCache is a middleware which overrides the Cache-Control, Pragma and Expires headers
 	// in order to disable the cache during the browser's back and forward feature.
@@ -510,6 +515,15 @@ var (
 	// A shortcut of the `cache#Cache304`.
 	Cache304 = cache.Cache304
 
+	// CookieOverride is a CookieOption which overrides the cookie explicitly to the given "cookie".
+	//
+	// A shortcut for the `context#CookieOverride`.
+	CookieOverride = context.CookieOverride
+	// CookieDomain is a CookieOption which sets the cookie's Domain field.
+	// If empty then the current domain is used.
+	//
+	// A shortcut for the `context#CookieDomain`.
+	CookieDomain = context.CookieDomain
 	// CookieAllowReclaim accepts the Context itself.
 	// If set it will add the cookie to (on `CookieSet`, `CookieSetKV`, `CookieUpsert`)
 	// or remove the cookie from (on `CookieRemove`) the Request object too.
@@ -618,8 +632,13 @@ var (
 	// A shortcut for the `context#ErrPushNotSupported`.
 	ErrPushNotSupported = context.ErrPushNotSupported
 	// PrivateError accepts an error and returns a wrapped private one.
-	// A shortcut for the `context#PrivateError`.
+	// A shortcut for the `context#PrivateError` function.
 	PrivateError = context.PrivateError
+
+	// TrimParamFilePart is a middleware which trims any last part after a dot (.) character
+	// of the current route's dynamic path parameters.
+	// A shortcut for the `context#TrimParamFilePart` function.
+	TrimParamFilePart Handler = context.TrimParamFilePart
 )
 
 // HTTP Methods copied from `net/http`.
@@ -779,7 +798,7 @@ type GlobalPatches struct {
 //
 // See its `Context` method.
 //
-// Example: https://github.com/kataras/iris/blob/master/_examples/response-writer/json-third-party/main.go
+// Example: https://github.com/kataras/iris/blob/main/_examples/response-writer/json-third-party/main.go
 func Patches() *GlobalPatches { // singleton.
 	return globalPatches
 }
@@ -850,3 +869,10 @@ func (cwp *ContextWriterPatches) Markdown(patchFunc func(ctx Context, v []byte, 
 func (cwp *ContextWriterPatches) YAML(patchFunc func(ctx Context, v interface{}, indentSpace int) error) {
 	context.WriteYAML = patchFunc
 }
+
+// Singleton is a structure which can be used as an embedded field on
+// struct/controllers that should be marked as singletons on `PartyConfigure` or `MVC` Applications.
+type Singleton struct{}
+
+// Singleton returns true as this controller is a singleton.
+func (c Singleton) Singleton() bool { return true }

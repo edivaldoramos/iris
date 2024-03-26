@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/kataras/iris/v12/context"
+
 	"github.com/mailgun/raymond/v2"
 )
 
@@ -103,8 +105,8 @@ func (s *HandlebarsEngine) Reload(developmentMode bool) *HandlebarsEngine {
 }
 
 // Layout sets the layout template file which should use
-// the {{ yield }} func to yield the main template file
-// and optionally {{partial/partial_r/render}} to render
+// the {{ yield . }} func to yield the main template file
+// and optionally {{partial/partial_r/render . }} to render
 // other template files like headers and footers.
 func (s *HandlebarsEngine) Layout(layoutFile string) *HandlebarsEngine {
 	s.layout = layoutFile
@@ -134,6 +136,11 @@ func (s *HandlebarsEngine) AddGlobalFunc(funcName string, funcBody interface{}) 
 //
 // Returns an error if something bad happens, user is responsible to catch it.
 func (s *HandlebarsEngine) Load() error {
+	// If only custom templates should be loaded.
+	if (s.fs == nil || context.IsNoOpFS(s.fs)) && len(s.templateCache) > 0 {
+		return nil
+	}
+
 	rootDirName := getRootDirName(s.fs)
 
 	return walk(s.fs, "", func(path string, info os.FileInfo, _ error) error {
@@ -238,7 +245,7 @@ func (s *HandlebarsEngine) ExecuteWriter(w io.Writer, filename string, layout st
 			if context == nil {
 				context = make(map[string]interface{}, 1)
 			}
-			// I'm implemented the {{ yield }} as with the rest of template engines, so this is not inneed for iris, but the user can do that manually if want
+			// I'm implemented the {{ yield . }} as with the rest of template engines, so this is not inneed for iris, but the user can do that manually if want
 			// there is no performance cost: raymond.RegisterPartialTemplate(name, tmpl)
 			context["yield"] = raymond.SafeString(contents)
 		}

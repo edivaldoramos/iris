@@ -403,33 +403,15 @@ func TestBindingsForStruct(t *testing.T) {
 		},
 		// 1. test controller with pre-defined variables.
 		{
-			Value: &controller{Name: "name_struct", Service: new(serviceImpl)},
-			Expected: []*binding{
-				{
-					Dependency: NewDependency("name_struct"),
-					Input:      &Input{Index: 0, StructFieldIndex: []int{0}, Type: reflect.TypeOf("")},
-				},
-				{
-					Dependency: NewDependency(new(serviceImpl)),
-					Input:      &Input{Index: 1, StructFieldIndex: []int{1}, Type: serviceTyp},
-				},
-			},
+			Value:    &controller{Name: "name_struct", Service: new(serviceImpl)},
+			Expected: nil,
 		},
 		// 2. test controller with pre-defined variables and other deps with the exact order and value
-		// (deps from non zero values should be registerded only, if not the Dependency:name_struct will fail for sure).
+		// (deps from non zero values should be not registerded, if not the Dependency:name_struct will fail for sure).
 		{
 			Value:      &controller{Name: "name_struct", Service: new(serviceImpl)},
 			Registered: deps,
-			Expected: []*binding{
-				{
-					Dependency: NewDependency("name_struct"),
-					Input:      &Input{Index: 0, StructFieldIndex: []int{0}, Type: reflect.TypeOf("")},
-				},
-				{
-					Dependency: NewDependency(new(serviceImpl)),
-					Input:      &Input{Index: 1, StructFieldIndex: []int{1}, Type: serviceTyp},
-				},
-			},
+			Expected:   nil,
 		},
 		// 3. test embedded structs with anonymous and exported.
 		{
@@ -524,7 +506,7 @@ func TestBindingsForStruct(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		bindings := getBindingsForStruct(reflect.ValueOf(tt.Value), tt.Registered, false, false, DefaultDependencyMatcher, 0, nil)
+		bindings := getBindingsForStruct(reflect.ValueOf(tt.Value), tt.Registered, false, false, false, DefaultDependencyMatcher, 0, nil)
 
 		if expected, got := len(tt.Expected), len(bindings); expected != got {
 			t.Logf("[%d] expected bindings length to be: %d but got: %d:\n", i, expected, got)
@@ -565,5 +547,5 @@ func TestBindingsForStructMarkExportedFieldsAsRequred(t *testing.T) {
 	}
 
 	// should panic if fail.
-	_ = getBindingsForStruct(reflect.ValueOf(new(controller)), dependencies, true, true, DefaultDependencyMatcher, 0, nil)
+	_ = getBindingsForStruct(reflect.ValueOf(new(controller)), dependencies, true, true, false, DefaultDependencyMatcher, 0, nil)
 }

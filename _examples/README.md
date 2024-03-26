@@ -1,4 +1,4 @@
-# Table of Contents
+# Table of Contents <a href="./README_ZH_HANT.md"> <img width="20px" src="https://iris-go.com/images/flag-china.svg?v=10" /> </a>
 
 * [Serverless](https://github.com/iris-contrib/gateway#netlify)
 * [REST API for Apache Kafka](kafka-api)
@@ -17,6 +17,8 @@
     * [Gorm](database/orm/gorm/main.go)
     * [Reform](database/orm/reform/main.go)
     * [x/sqlx](database/sqlx/main.go) **NEW**
+* GraphQL
+    * [GraphQL: schema-first](graphql/schema-first) **NEW**
 * HTTP Server
     * [HOST:PORT](http-server/listen-addr/main.go)
     * [Public Test Domain](http-server/listen-addr-public/main.go)
@@ -46,12 +48,13 @@
     * [Import from TOML](configuration/from-toml-file/main.go)
     * [Multi Environment Configuration](configuration/multi-environments) **NEW**
 * Routing
+    * [Custom Context](routing/custom-context/main.go) **HOT/NEW**
     * [Party Controller](routing/party-controller) **NEW**
     * [Overview](routing/overview/main.go)
     * [Basic](routing/basic/main.go)
     * [Custom HTTP Errors](routing/http-errors/main.go)
     * [HTTP Wire Errors](routing/http-wire-errors/main.go) **NEW**
-        * [Custom Validation Errors](routing/http-wire-errors/custom-validation-errors/main.go)
+        * [Service and Validation](routing/http-wire-errors/service/main.go) **NEW**
     * [Not Found - Intelligence](routing/intelligence/main.go)
         * [Not Found - Suggest Closest Paths](routing/intelligence/manual/main.go)
     * [Dynamic Path](routing/dynamic-path/main.go)
@@ -88,7 +91,7 @@
         * [Redirection](routing/subdomains/redirect/main.go)
             * [Multi Instances](routing/subdomains/redirect/multi-instances/main.go)
         * [HTTP Errors View](routing/subdomains/http-errors-view/main.go)
-    * [HTTP Method Override](https://github.com/kataras/iris/blob/master/middleware/methodoverride/methodoverride_test.go)
+    * [HTTP Method Override](https://github.com/kataras/iris/blob/main/middleware/methodoverride/methodoverride_test.go)
     * [API Versioning](routing/versioning/main.go)
     * [Sitemap](routing/sitemap/main.go)
 * Logging
@@ -105,9 +108,10 @@
         * [Root and Proxy AccessLog instances](logging/request-logger/accesslog-proxy/main.go)
         * [Slack integration example](logging/request-logger/accesslog-slack/main.go)
 * API Documentation
-    * [Yaag](apidoc/yaag/main.go)
     * [Swagger](https://github.com/iris-contrib/swagger/tree/master/_examples/basic)
-* [Testing](testing/httptest/main_test.go)
+* Testing
+    * [Testing with httptest](testing/httptest/main_test.go)
+    * [Testing with ginkgo](testing/ginkgotest)
 * [Recovery](recover/main.go)
     * [Panic and custom Error Handler with Compression](recover/panic-and-custom-error-handler-with-compression/main.go)
 * [Profiling](pprof/main.go)
@@ -134,7 +138,6 @@
     * [Overview](view/overview/main.go)
     * [Layout](view/layout)
         * [Ace](view/layout/ace)
-        * [Amber](view/layout/amber)
         * [Blocks](view/layout/blocks)
         * [Django](view/layout/django)
         * [Handlebars](view/layout/handlebars)
@@ -156,7 +159,6 @@
     * Parse a Template from Text
         * [HTML, Pug and Ace](view/parse-parse/main.go)
         * [Django](view/parse-parse/django/main.go)
-        * [Amber](view/parse-parse/amber/main.go)
         * [Jet](view/parse-parse/jet/main.go)
         * [Handlebars](view/parse-parse/handlebars/main.go)
     * [Blocks](view/template_blocks_0)
@@ -166,8 +168,6 @@
     * [Pug Embedded`](view/template_pug_2_embedded)
     * [Ace](view/template_ace_0)
     * [Django](view/template_django_0)
-    * [Amber](view/template_amber_0)
-    * [Amber Embedded](view/template_amber_1_embedded)
     * [Jet](view/template_jet_0)
     * [Jet Embedded](view/template_jet_1_embedded)
     * [Jet 'urlpath' tmpl func](view/template_jet_2)
@@ -176,7 +176,8 @@
     * Third-Parties
         * [Render `valyala/quicktemplate` templates](view/quicktemplate)
         * [Render `shiyanhui/hero` templates](view/herotemplate)
-* [Request ID](https://github.com/kataras/iris/blob/master/middleware/requestid/requestid_test.go)
+        * [Render `a-h/templ` templates](view/templ) **NEW**
+* [Request ID](https://github.com/kataras/iris/blob/main/middleware/requestid/requestid_test.go)
 * [Request Rate Limit](request-ratelimit/main.go)
 * [Request Referrer](request-referrer/main.go)
 * [Webassembly](webassembly/main.go)

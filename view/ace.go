@@ -1,6 +1,7 @@
 package view
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/yosssi/ace"
@@ -45,7 +46,7 @@ func Ace(fs interface{}, extension string) *AceEngine {
 
 	s.middleware = func(name string, text []byte) (contents string, err error) {
 		once.Do(func() { // on first template parse, all funcs are given.
-			for k, v := range emptyFuncs {
+			for k, v := range s.getBuiltinFuncs(name) {
 				funcs[k] = v
 			}
 
@@ -61,6 +62,12 @@ func Ace(fs interface{}, extension string) *AceEngine {
 			ace.NewFile("", []byte{}),
 			[]*ace.File{},
 		)
+
+		if strings.Contains(name, "layout") {
+			for k, v := range s.layoutFuncs {
+				funcs[k] = v
+			}
+		}
 
 		opts := &ace.Options{
 			Extension:  extension[1:],

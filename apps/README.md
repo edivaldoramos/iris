@@ -2,7 +2,7 @@
 
 Package `github.com/kataras/iris/v12/apps` provides a globally scoped control over all registered Iris Applications of the same Program.
 
-[Example Application](https://github.com/kataras/iris/tree/master/_examples/routing/subdomains/redirect/multi-instances)
+[Example Application](https://github.com/kataras/iris/tree/main/_examples/routing/subdomains/redirect/multi-instances)
 
 Below you will find a use case for each feature.
 
@@ -121,9 +121,9 @@ Example Code:
 
 ```go
 switcher := Switch(Hosts{
-	"mydomain.com": app,
-	"test.mydomain.com": testSubdomainApp,
-	"otherdomain.com": "appName",
+	{Pattern: "mydomain.com", Target: app},
+	{Pattern: "test.mydomain.com", Target: testSubdomainApp},
+	{Pattern: "otherdomain.com", Target: "appName"},
 })
 switcher.Listen(":80")
 ```
@@ -211,7 +211,7 @@ Switch(Join{
 		App:    myapp,
 	},
 	Hosts{
-		{"^test.*$", myapp},
+		{Pattern: "^test.*$", Target: myapp},
 	},
 })
 ```

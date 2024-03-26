@@ -8,6 +8,7 @@ func main() {
 	// Note, in Blocks engine, layouts
 	// are used by their base names, the
 	// blocks.LayoutDir(layoutDir) defaults to "./layouts".
+	// .Blocks(...).Layout("main") for default layout for all views, it can be modified through ctx.ViewLayout though.
 
 	app.Get("/", index)
 
@@ -22,5 +23,8 @@ func index(ctx iris.Context) {
 	}
 
 	ctx.ViewLayout("main")
-	ctx.View("index", data)
+	if err := ctx.View("index", data); err != nil {
+		ctx.HTML("<h3>%s</h3>", err.Error())
+		return
+	}
 }
